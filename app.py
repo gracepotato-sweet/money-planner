@@ -5,6 +5,7 @@ from functools import wraps
 from flask import Flask, request, redirect, url_for, session, flash, render_template_string
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import UniqueConstraint, func
+from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_wtf.csrf import CSRFProtect
 
@@ -140,9 +141,17 @@ def save(what):
             obj.category_id=c.id; obj.kind=c.kind; obj.amount=num('amount'); obj.day=day('day'); obj.note=request.form.get('note','')[:255]
         elif what=='category':
             obj=owned(Category,int(ident)) if ident else Category(user_id=uid)
-            obj.name=request.form['name'].strip()[:100]; obj.kind=request.form['kind']
-            if obj.kind not in ('income','expense') or not obj.name: raise ValueError('กรอกหมวดหมู่ให้ถูกต้อง')
-            if ident and Transaction.query.filter_by(user_id=uid,category_id=obj.id).first() and obj.kind!=Category.query.get(obj.id).kind: raise ValueError('ไม่สามารถเปลี่ยนประเภทหมวดหมู่ที่มีรายการอยู่')
+            new_name=request.form.get('name','').strip()[:100]
+            new_kind=request.form.get('kind','')
+            if new_kind not in ('income','expense') or not new_name:
+                raise ValueError('กรุณากรอกชื่อและประเภทหมวดหมู่ให้ถูกต้อง')
+            if ident and obj.kind != new_kind and Transaction.query.filter_by(user_id=uid,category_id=obj.id).first():
+                raise ValueError('หมวดหมู่นี้มีรายการรายรับรายจ่ายอยู่ จึงเปลี่ยนประเภทไม่ได้')
+            duplicate=Category.query.filter_by(user_id=uid,name=new_name,kind=new_kind).first()
+            if duplicate and duplicate.id != obj.id:
+                raise ValueError('มีหมวดหมู่ชื่อนี้ในประเภทเดียวกันอยู่แล้ว กรุณาใช้ชื่ออื่น')
+            obj.name=new_name
+            obj.kind=new_kind
         elif what=='budget':
             obj=owned(Budget,int(ident)) if ident else Budget(user_id=uid)
             cid=request.form.get('category_id')
@@ -166,6 +175,10 @@ def save(what):
         db.session.commit(); flash('บันทึกเรียบร้อย')
     except ValueError as e:
         db.session.rollback(); flash('ไม่สามารถบันทึกได้: '+str(e))
+    except IntegrityError:
+        app.logger.warning('Save blocked by database integrity constraint', exc_info=True)
+        db.session.rollback()
+        flash('บันทึกไม่ได้: ข้อมูลซ้ำหรือขัดกับเงื่อนไขฐานข้อมูล กรุณาตรวจสอบชื่อหมวดหมู่')
     except Exception:
         app.logger.exception('Save failed')
         db.session.rollback(); flash('บันทึกไม่สำเร็จ กรุณาตรวจสอบข้อมูลแล้วลองใหม่')
