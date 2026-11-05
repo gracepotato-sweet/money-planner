@@ -196,4 +196,12 @@ function editBudget(id,cat,amount,start,end){let f=document.getElementById('budg
 function addItem(){let root=document.getElementById('items');if(root.querySelectorAll('.product').length>=12)return alert('เพิ่มได้สูงสุด 12 รายการ');let el=root.querySelector('.product').cloneNode(true);el.querySelectorAll('input').forEach(x=>x.value='');el.querySelector('label').textContent='ชื่อสินค้าเพิ่ม';root.append(document.createElement('hr'),el)}
 </script></body></html>'''
 
+from flask import send_from_directory
+
+@app.route('/google9c0a6c36d0171faf.html')
+def google_verification():
+    return send_from_directory(
+        app.root_path,
+        'google9c0a6c36d0171faf.html'
+    )
 if __name__=='__main__': app.run(debug=True)
